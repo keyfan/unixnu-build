@@ -90,11 +90,24 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: ./unixnu build kernel
 
+      - name: Build DarwinBoot
+        id: darwinboot
+        run: |
+          chmod +x device/scripts/build-darwinboot.sh
+          device/scripts/build-darwinboot.sh DEBUG
+          cp out/darwinboot/DarwinBoot.efi /tmp/DarwinBoot.efi
+
       - name: Build payload
         id: payload
         env:
           UNIXNU_UNIQUE_CHIP_ID: ${{ secrets.UNIXNU_UNIQUE_CHIP_ID }}
         run: ./unixnu build payload
+
+      - name: Inject DarwinBoot into payload.img
+        if: steps.payload.outcome == 'success' && steps.darwinboot.outcome == 'success'
+        run: |
+          mcopy -i out/*/payload/payload.img /tmp/DarwinBoot.efi ::/EFI/UniXNU/Payloads/DarwinBoot.efi
+          echo "injected DarwinBoot.efi"
 
       - name: Upload kernel artifacts
         if: always() && steps.kernel.outcome == 'success'
