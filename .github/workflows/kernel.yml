@@ -88,11 +88,7 @@ jobs:
         id: kernel
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          export XNU_SOURCE_MOCKFS=1
-          export XNU_BOOTSTRAP=0
-          echo "XNU_SOURCE_MOCKFS=$XNU_SOURCE_MOCKFS XNU_BOOTSTRAP=$XNU_BOOTSTRAP"
-          ./unixnu build kernel
+        run: ./unixnu build kernel
 
       - name: Build DarwinBoot
         id: darwinboot
