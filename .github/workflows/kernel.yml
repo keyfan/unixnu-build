@@ -89,6 +89,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          # First pass: build archives (may fail at link)
+          ./unixnu build kernel || true
           # Copy mockfs fixture to where build script expects it
           MOCKFS_SRC=$(find out -name 'libmockfs_fixture.a' 2>/dev/null | head -1)
           if [ -n "$MOCKFS_SRC" ]; then
@@ -98,6 +100,7 @@ jobs:
           else
             echo "WARNING: mockfs fixture not found in out/"
           fi
+          # Second pass: final link with mockfs fixture
           ./unixnu build kernel
 
       - name: Build DarwinBoot
