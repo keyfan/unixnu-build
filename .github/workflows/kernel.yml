@@ -88,8 +88,15 @@ jobs:
         id: kernel
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          XNU_EXTRA_LD_ARCHIVES: "-Wl,-force_load,$PWD/build/mockfs-fixture/libmockfs_fixture.a"
-        run: ./unixnu build kernel
+        run: |
+          MOCKFS="$PWD/build/mockfs-fixture/libmockfs_fixture.a"
+          if [ -f "$MOCKFS" ]; then
+            export XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,$MOCKFS"
+            echo "XNU_EXTRA_LD_ARCHIVES=$XNU_EXTRA_LD_ARCHIVES"
+          else
+            echo "WARNING: mockfs fixture not found at $MOCKFS"
+          fi
+          ./unixnu build kernel
 
       - name: Build DarwinBoot
         id: darwinboot
