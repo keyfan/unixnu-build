@@ -90,7 +90,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           export XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,$PWD/out/enchilada/tree/build/mockfs-fixture/libmockfs_fixture.a"
+          export XNU_BOOTSTRAP=0
           echo "XNU_EXTRA_LD_ARCHIVES=$XNU_EXTRA_LD_ARCHIVES"
+          echo "XNU_BOOTSTRAP=$XNU_BOOTSTRAP"
           ./unixnu build kernel
 
       - name: Build DarwinBoot
