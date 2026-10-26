@@ -89,18 +89,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          # First pass: build archives (may fail at link)
-          ./unixnu build kernel || true
-          # Copy mockfs fixture to where build script expects it
-          MOCKFS_SRC=$(find out -name 'libmockfs_fixture.a' 2>/dev/null | head -1)
-          if [ -n "$MOCKFS_SRC" ]; then
-            mkdir -p build/mockfs-fixture
-            cp "$MOCKFS_SRC" build/mockfs-fixture/libmockfs_fixture.a
-            echo "Copied mockfs fixture: $MOCKFS_SRC -> build/mockfs-fixture/"
-          else
-            echo "WARNING: mockfs fixture not found in out/"
-          fi
-          # Second pass: final link with mockfs fixture
+          export XNU_SOURCE_MOCKFS=1
+          export XNU_BOOTSTRAP=0
+          echo "XNU_SOURCE_MOCKFS=$XNU_SOURCE_MOCKFS XNU_BOOTSTRAP=$XNU_BOOTSTRAP"
           ./unixnu build kernel
 
       - name: Build DarwinBoot
