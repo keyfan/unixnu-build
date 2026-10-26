@@ -86,7 +86,7 @@ jobs:
 
       - name: Patch build script for mockfs linking
         run: |
-          python3 scripts/patch-mockfs-link.py
+          python3 device/scripts/patch-mockfs-link.py
 
       - name: Build kernel
         id: kernel
