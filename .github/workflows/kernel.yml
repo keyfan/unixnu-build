@@ -89,13 +89,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          MOCKFS=$(find out -name 'libmockfs_fixture.a' 2>/dev/null | head -1)
-          if [ -n "$MOCKFS" ] && [ -f "$MOCKFS" ]; then
-            export XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,$PWD/$MOCKFS"
-            echo "XNU_EXTRA_LD_ARCHIVES=$XNU_EXTRA_LD_ARCHIVES"
-          else
-            echo "WARNING: mockfs fixture not found"
-          fi
+          export XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,$PWD/out/enchilada/tree/build/mockfs-fixture/libmockfs_fixture.a"
+          echo "XNU_EXTRA_LD_ARCHIVES=$XNU_EXTRA_LD_ARCHIVES"
           ./unixnu build kernel
 
       - name: Build DarwinBoot
