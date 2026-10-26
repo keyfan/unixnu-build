@@ -89,10 +89,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          export XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,$PWD/out/enchilada/tree/build/mockfs-fixture/libmockfs_fixture.a"
-          export XNU_BOOTSTRAP=0
-          echo "XNU_EXTRA_LD_ARCHIVES=$XNU_EXTRA_LD_ARCHIVES"
-          echo "XNU_BOOTSTRAP=$XNU_BOOTSTRAP"
+          # Copy mockfs fixture to where build script expects it
+          MOCKFS_SRC=$(find out -name 'libmockfs_fixture.a' 2>/dev/null | head -1)
+          if [ -n "$MOCKFS_SRC" ]; then
+            mkdir -p build/mockfs-fixture
+            cp "$MOCKFS_SRC" build/mockfs-fixture/libmockfs_fixture.a
+            echo "Copied mockfs fixture: $MOCKFS_SRC -> build/mockfs-fixture/"
+          else
+            echo "WARNING: mockfs fixture not found in out/"
+          fi
           ./unixnu build kernel
 
       - name: Build DarwinBoot
