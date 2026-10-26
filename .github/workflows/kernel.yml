@@ -89,12 +89,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          MOCKFS="$PWD/build/mockfs-fixture/libmockfs_fixture.a"
-          if [ -f "$MOCKFS" ]; then
-            export XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,$MOCKFS"
+          MOCKFS=$(find out -name 'libmockfs_fixture.a' 2>/dev/null | head -1)
+          if [ -n "$MOCKFS" ] && [ -f "$MOCKFS" ]; then
+            export XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,$PWD/$MOCKFS"
             echo "XNU_EXTRA_LD_ARCHIVES=$XNU_EXTRA_LD_ARCHIVES"
           else
-            echo "WARNING: mockfs fixture not found at $MOCKFS"
+            echo "WARNING: mockfs fixture not found"
           fi
           ./unixnu build kernel
 
