@@ -84,14 +84,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: ./unixnu fetch
 
-      - name: Patch build script for mockfs linking
-        run: |
-          python3 device/scripts/patch-mockfs-link.py
-
       - name: Build kernel
         id: kernel
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          XNU_EXTRA_LD_ARCHIVES: "-Wl,-force_load,$PWD/build/mockfs-fixture/libmockfs_fixture.a"
         run: ./unixnu build kernel
 
       - name: Build DarwinBoot
