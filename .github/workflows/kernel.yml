@@ -84,6 +84,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: ./unixnu fetch
 
+      - name: Create mockfs stubs and patch build script
+        run: |
+          chmod +x device/scripts/patch-mockfs-stubs.sh
+          device/scripts/patch-mockfs-stubs.sh
+
       - name: Build kernel
         id: kernel
         env:
