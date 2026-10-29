@@ -99,6 +99,15 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: ./unixnu fetch
 
+      # A device repository that carries its own patches/xnu/ replaces UniXNU's shared series instead of
+      # adding to it, and nothing fails: the build applies whatever it finds.  The board patches therefore
+      # live in patches/xnu-device/ and this step writes patches/xnu/ as the union, which is what the tree
+      # links and what the kernel build applies.  It has to run before the tree is assembled below.
+      - name: Compose the XNU patch series
+        run: |
+          python3 device/scripts/compose-xnu-patches.py --write --unixnu "$GITHUB_WORKSPACE"
+          python3 device/scripts/compose-xnu-patches.py --unixnu "$GITHUB_WORKSPACE"
+
       - name: Fetch the IPSW components the archive builders audit
         run: ./unixnu ipsw fetch KernelCache OS Cryptex1,SystemOS
 
