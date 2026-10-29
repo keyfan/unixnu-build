@@ -1,0 +1,51 @@
+name: Runner probe
+
+# Answers the questions the kernel build depends on before it spends six hours:
+# how much disk the runner has, whether the pinned Xcode and OpenSSL are there,
+# and whether the Apple CDN honours a ranged GET from a GitHub runner.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  probe:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - name: Disk before
+        run: |
+          df -h /
+          df -h "$RUNNER_TEMP"
+          sysctl -n hw.memsize
+
+      - name: Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          ls -d /Applications/Xcode_26.6.app 2>/dev/null || echo "no Xcode_26.6.app"
+
+      - name: OpenSSL
+        run: |
+          openssl version || true
+          brew --prefix openssl@3 || true
+          ls "$(brew --prefix openssl@3)/include/openssl/evp.h" 2>/dev/null || echo "no evp.h"
+
+      - name: The Apple CDN from a runner
+        run: |
+          URL="https://updates.cdn-apple.com/2025SpringFCS/fullrestores/122-77166/DCA6CFE8-90E9-4B92-880D-3DE171798E40/iPad_Pro_HFR_17.7.11_21H461_Restore.ipsw"
+          curl -sSIL --max-time 60 "$URL" | head -20
+          echo '--- ranged GET of 64 bytes ---'
+          curl -sS -o /tmp/first.bin -w 'code=%{http_code} bytes=%{size_download}\n' \
+            --max-time 120 -r 0-63 "$URL"
+          xxd /tmp/first.bin | head -2
+
+      - name: Disk after deleting the Xcodes the build does not use
+        run: |
+          sudo rm -rf /Applications/Xcode_1[0-5]*.app /Applications/Xcode_26.[0-5].app /Applications/Xcode-*.app 2>/dev/null || true
+          ls -d /Applications/Xcode*.app
+          df -h /
