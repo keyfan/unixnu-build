@@ -43,6 +43,11 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_${{ inputs.xcode }}.app/Contents/Developer
       DEFCONFIG: ${{ inputs.defconfig }}
+      # Font.h of the boot progress console (build-boot-progress.py) lives in the Mu-Silicium checkout.
+      UNIXNU_UEFI: ${{ github.workspace }}/../Mu-Silicium
+      # build-native-legacy-display.py only reads the candidate from this variable (the storage builder
+      # additionally falls back to the same path); it is the prelink of the kernel built above.
+      ENCHILADA_STORAGE_CANDIDATE: ${{ github.workspace }}/out/enchilada/kernel/kernel.macho
     steps:
       - name: Check out UniXNU (public upstream)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -76,6 +81,16 @@ jobs:
             echo "$(brew --prefix unifdef)/bin" >> "$GITHUB_PATH"
           fi
 
+      - name: Report the disk the IPSW components need
+        run: |
+          df -h /
+          df -h "$RUNNER_TEMP"
+
+      - name: Check out Mu-Silicium for the boot progress console
+        run: |
+          git clone --depth 1 https://github.com/Project-Silicium/Mu-Silicium.git ../Mu-Silicium
+          test -f ../Mu-Silicium/Silicon/Silicium/SiliciumPkg/Library/FrameBufferSerialPortLib/Font.h
+
       - name: Select the device
         run: ./unixnu defconfig "$DEFCONFIG" -D "$GITHUB_WORKSPACE/device"
 
@@ -83,6 +98,51 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: ./unixnu fetch
+
+      - name: Fetch the IPSW components the archive builders audit
+        run: ./unixnu ipsw fetch KernelCache OS Cryptex1,SystemOS
+
+      # The archive builders in [kernel] archives run before this step's own prelink, so their audits need a
+      # reference prelink of the *original* Apple components on a tree that has never been linked.
+      # build-enchilada-storage.py documents the property that makes one reusable: the slots it binds are the
+      # original IOStorageFamily's at the board-independent slide, so any prelink of the pinned kernelcache
+      # qualifies.  The seed below is exactly that -- an earlier prelink of 21H461, published as a release
+      # asset (work/tmp/publish_seed.py) with the plan that scripts/make-seed-candidate.py rebuilt from the
+      # image's own _PrelinkInfoDictionary.  Every audit still re-derives the original digests from the image,
+      # so a seed that is not from this kernelcache fails rather than passing quietly.
+      - name: Fetch the seed candidate the archive builders audit
+        env:
+          SEED: https://github.com/keyfan/unixnu-build/releases/download/seed-candidate-1
+        run: |
+          mkdir -p out/enchilada/kernel out/enchilada/seed
+          curl -fsSL "$SEED/native-owner-ufs-rootauth3-candidate.macho.gz" -o out/enchilada/seed/candidate.macho.gz
+          curl -fsSL "$SEED/native-owner-ufs-rootauth3-candidate.json" -o out/enchilada/seed/candidate.json
+          gunzip -c out/enchilada/seed/candidate.macho.gz > out/enchilada/kernel/kernel.macho
+          cp out/enchilada/seed/candidate.json out/enchilada/kernel/kernel.json
+          python3 - <<'PY'
+          import hashlib, json, pathlib
+          image = pathlib.Path('out/enchilada/kernel/kernel.macho').read_bytes()
+          plan = json.loads(pathlib.Path('out/enchilada/kernel/kernel.json').read_text())
+          digest = hashlib.sha256(image).hexdigest()
+          if digest != plan['candidate_sha256']:
+              raise SystemExit(f'seed is {digest}, but its plan describes {plan["candidate_sha256"]}')
+          print(f'seed candidate {digest[:16]}: {len(plan["components"])} components, {len(plan["extents"])} extents')
+          PY
+          # The tree has to exist before the reference names can be staged into it.  Assembling it here also
+          # surfaces a missing module now rather than halfway through the kernel build.
+          ./unixnu tree
+          # audit-amfi-pmgr-contract.py reads build/xnu-prelink/; the storage builder stages
+          # build/native-prelink/; build-native-legacy-display.py globs native-owner-ufs-cpu-desktop-*-candidate.
+          # All three want the same reference prelink, so every spelling is placed now.
+          for tree in out/*/tree; do
+            mkdir -p "$tree/build/xnu-prelink"
+            for name in native-owner-ufs-rootauth3-candidate native-owner-ufs-cpu-desktop-enchilada-candidate; do
+              for suffix in macho json; do
+                cp "out/enchilada/kernel/kernel.$suffix" "$tree/build/xnu-prelink/$name.$suffix"
+              done
+            done
+          done
+          ls -l out/*/tree/build/xnu-prelink/ out/enchilada/kernel/
 
       - name: Build kernel
         id: kernel
