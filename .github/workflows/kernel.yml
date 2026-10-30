@@ -119,8 +119,7 @@ jobs:
       - name: Build the trust cache bundle the userland is signed against
         run: |
           ./unixnu ipsw fetch StaticTrustCache Cryptex1,SystemTrustCache
-          python3 device/scripts/make-enchilada-trust-bundle.py --unixnu "$GITHUB_WORKSPACE" \
-            --output "$GITHUB_WORKSPACE/out/enchilada-trust.bundle"
+          python3 device/scripts/make-enchilada-trust-bundle.py --unixnu "$GITHUB_WORKSPACE"
 
       # The archive builders in [kernel] archives run before this step's own prelink, so their audits need a
       # reference prelink of the *original* Apple components on a tree that has never been linked.
