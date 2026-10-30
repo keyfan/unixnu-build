@@ -111,6 +111,17 @@ jobs:
       - name: Fetch the IPSW components the archive builders audit
         run: ./unixnu ipsw fetch KernelCache OS Cryptex1,SystemOS
 
+      # The 21H461 userland is ad-hoc signed without a ticket, so AMFI can only resolve launchd and dyld from a
+      # trust cache.  The stock device gets that from iBoot; a `fastboot boot` of our own image gets it only if
+      # the payload carries the bundle, because DarwinBoot is what copies it into the kernel window and writes
+      # the /chosen/memory-map/TrustCache placeholder.  Both original modules are pinned in board.toml [payload]
+      # trust_cache_sha256, so the payload step accepts the result as-is.
+      - name: Build the trust cache bundle the userland is signed against
+        run: |
+          ./unixnu ipsw fetch StaticTrustCache Cryptex1,SystemTrustCache
+          python3 device/scripts/make-enchilada-trust-bundle.py --unixnu "$GITHUB_WORKSPACE" \
+            --output "$GITHUB_WORKSPACE/out/enchilada-trust.bundle"
+
       # The archive builders in [kernel] archives run before this step's own prelink, so their audits need a
       # reference prelink of the *original* Apple components on a tree that has never been linked.
       # build-enchilada-storage.py documents the property that makes one reusable: the slots it binds are the
@@ -170,7 +181,19 @@ jobs:
         id: payload
         env:
           UNIXNU_UNIQUE_CHIP_ID: ${{ secrets.UNIXNU_UNIQUE_CHIP_ID }}
-        run: ./unixnu build payload
+        run: |
+          ./unixnu build payload --trust-cache "$GITHUB_WORKSPACE/out/enchilada-trust.bundle"
+          # The bundle is what the userland is verified against; a payload that silently leaves it out looks
+          # identical until init execs launchd and AMFI rejects it, so fail here instead.
+          python3 - <<'PY'
+          import hashlib, json, pathlib
+          bundle = pathlib.Path('out/enchilada-trust.bundle')
+          report = json.loads(next(pathlib.Path('out').glob('*/payload/payload.json')).read_text())
+          digest = hashlib.sha256(bundle.read_bytes()).hexdigest()
+          if report.get('trust_cache_sha256') != digest:
+              raise SystemExit(f'payload.json records {report.get("trust_cache_sha256")}, the bundle is {digest}')
+          print(f'trust cache {digest[:16]}: {bundle.stat().st_size} bytes, recorded in payload.json')
+          PY
 
       - name: Inject DarwinBoot into payload.img
         if: steps.payload.outcome == 'success' && steps.darwinboot.outcome == 'success'
