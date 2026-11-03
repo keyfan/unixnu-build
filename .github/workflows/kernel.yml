@@ -19,9 +19,23 @@ on:
         description: Xcode version of the macos-26 image (/Applications/Xcode_<version>.app)
         required: true
         default: "26.6"
+      data_seed_run_id:
+        description: >-
+          Run id of a "Data seed" workflow (keyfan/UniXNU-enchilada-bringup) whose data-seed-linux
+          artifact is put on the payload as the writable Data volume. Leave empty for a read-only
+          first boot. Its APFS volume UUID has to equal CONFIG_XNU_OWNER_DATA_VOLUME_UUID of the
+          defconfig; the build checks that here instead of letting load_init_program panic.
+        required: false
+        default: ""
+      skip_setup:
+        description: Mark Setup as done in the Data seed so the Hello pages are skipped. Needs data_seed_run_id.
+        required: false
+        default: "false"
 
 permissions:
   contents: read
+  # download-artifact reads the Data seed from a run of the device repository.
+  actions: read
 
 concurrency:
   group: build-kernel-${{ github.ref }}-${{ inputs.device_repository }}-${{ inputs.device_ref }}-${{ inputs.defconfig }}
@@ -176,12 +190,57 @@ jobs:
           device/scripts/build-darwinboot.sh DEBUG
           cp out/darwinboot/DarwinBoot.efi /tmp/DarwinBoot.efi
 
+      # The writable Data volume (/private/var) comes from the packed APFS seed that the "Data seed"
+      # workflow of the device repository builds: mkapfs pins the volume UUID there, so the seed always
+      # matches CONFIG_XNU_OWNER_DATA_VOLUME_UUID.  Without it /private/var is the read-only OS volume and
+      # tzinit exits 30 on /var/db/timezone/zoneinfo, which launchd treats as a fatal boot task.
+      - name: Fetch the Data seed
+        id: dataseed
+        if: ${{ inputs.data_seed_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: data-seed-linux
+          path: /tmp/data-seed
+          run-id: ${{ inputs.data_seed_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # The UUID is compiled into the kernel and a mismatch is a panic in load_init_program, not a
+      # fallback, so it is checked before the payload is built.
+      - name: Check the Data seed against the kernel
+        if: ${{ inputs.data_seed_run_id != '' }}
+        run: |
+          configured=$(grep -E '^CONFIG_XNU_OWNER_DATA_VOLUME_UUID=' device/configs/*defconfig | head -1 | cut -d'"' -f2)
+          python3 - "$configured" <<'PY'
+          import json, sys
+          expected = sys.argv[1].upper()
+          report = json.load(open('/tmp/data-seed/data-linux.json'))
+          actual = str(report['volume_uuid']).upper()
+          print('seed volume_uuid:', actual)
+          print('kernel compiled for:', expected)
+          print('seed role:', report.get('role'), 'packed_bytes:', report.get('packed_bytes'))
+          if actual != expected:
+              raise SystemExit(
+                  f'the seed carries {actual} but the kernel was compiled for {expected}; '
+                  'load_init_program would panic("offline scratch Data mount failed") before launchd')
+          if report.get('role') not in (None, [], ['None'], 'none'):
+              raise SystemExit(f'the seed carries role {report["role"]}; iOS panics on an unencrypted Data-role volume')
+          print('the seed matches the kernel')
+          PY
+
       - name: Build payload
         id: payload
         env:
           UNIXNU_UNIQUE_CHIP_ID: ${{ secrets.UNIXNU_UNIQUE_CHIP_ID }}
         run: |
-          ./unixnu build payload --trust-cache "$GITHUB_WORKSPACE/out/enchilada-trust.bundle"
+          args=""
+          if [ -n "${{ inputs.data_seed_run_id }}" ]; then
+            args="$args --data-ramdisk /tmp/data-seed/data-linux.dbr"
+            if [ "${{ inputs.skip_setup }}" = "true" ]; then
+              args="$args --skip-setup"
+            fi
+          fi
+          # shellcheck disable=SC2086
+          ./unixnu build payload --trust-cache "$GITHUB_WORKSPACE/out/enchilada-trust.bundle" $args
           # The bundle is what the userland is verified against; a payload that silently leaves it out looks
           # identical until init execs launchd and AMFI rejects it, so fail here instead.
           python3 - <<'PY'
