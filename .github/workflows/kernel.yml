@@ -202,6 +202,9 @@ jobs:
           name: data-seed-linux
           path: /tmp/data-seed
           run-id: ${{ inputs.data_seed_run_id }}
+          # download-artifact reads the current repository unless told otherwise, and the seed
+          # was produced by the device repository's own Data seed workflow.
+          repository: ${{ inputs.device_repository }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # The UUID is compiled into the kernel and a mismatch is a panic in load_init_program, not a
