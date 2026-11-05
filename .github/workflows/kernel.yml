@@ -39,7 +39,7 @@ on:
           UniXNU/ArmCpu any more, so "git submodule update --init" fails the fetch step before
           anything compiles. This is the last upstream commit whose pointers all resolve.
         required: true
-        default: "7307c26ea5058fdf3bbd2c0d1e28d6e5a0e7c03a"
+        default: "8ddccb1e42d0063a2e613f897155c83994f60b11"
 
 permissions:
   contents: read
