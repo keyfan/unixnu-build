@@ -31,6 +31,15 @@ on:
         description: Mark Setup as done in the Data seed so the Hello pages are skipped. Needs data_seed_run_id.
         required: false
         default: "false"
+      unixnu_ref:
+        description: >-
+          UniXNU/UniXNU commit to build against. Pinned rather than tracking main because
+          upstream force-pushed main on 2026-11-05T18:23Z and its drivers/ArmCpu submodule
+          pointer (2e11cda72740b985dedde3e32ba72b0fd64eb475) is not reachable from
+          UniXNU/ArmCpu any more, so "git submodule update --init" fails the fetch step before
+          anything compiles. This is the last upstream commit whose pointers all resolve.
+        required: true
+        default: "7307c26ea5058fdf3bbd2c0d1e28d6e5a0e7c03a"
 
 permissions:
   contents: read
@@ -67,6 +76,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: UniXNU/UniXNU
+          ref: ${{ inputs.unixnu_ref }}
           persist-credentials: false
 
       - name: Check out the device repository
